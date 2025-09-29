@@ -1,4 +1,6 @@
 # Python WAF: A Simple Web Application Firewall
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 A simple, educational Web Application Firewall (WAF) written in Python. This script acts as a reverse proxy to inspect incoming web traffic for common threats like SQL Injection (SQLi) and Cross-Site Scripting (XSS). It's designed to be a learning tool to understand the core concepts behind how a WAF operates.
 

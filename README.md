@@ -76,7 +76,7 @@ Enter path to SSL private key file (e.g., key.pem): key.pem
 
 --- Starting WAF ---
 ✅ WAF running in SSL/TLS (HTTPS) mode on port 443
-Forwarding to: [http://192.168.10.50:80](http://192.168.10.50:80)
+Forwarding to: http://192.168.10.50:80
 Press Ctrl+C to stop.
 ```
 

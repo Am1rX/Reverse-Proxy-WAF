@@ -1,164 +1,150 @@
-# Python WAF: A Simple Web Application Firewall
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+# Reverse-Proxy WAF
 
-A simple, educational Web Application Firewall (WAF) written in Python. This script acts as a reverse proxy to inspect incoming web traffic for common threats like SQL Injection (SQLi) and Cross-Site Scripting (XSS). It's designed to be a learning tool to understand the core concepts behind how a WAF operates.
+A lightweight, dependency-optional **Web Application Firewall** that sits in front
+of your backend HTTP server, inspects incoming traffic for common web attacks,
+blocks or logs them, and transparently proxies clean requests upstream.
 
-> **⚠️ Disclaimer:** This is an educational project and is **NOT** suitable for a production environment. Production-grade WAFs are far more sophisticated and undergo rigorous security testing.
-
----
+This is a hardened rewrite of a learning-grade WAF. It is suitable as a **first
+filtering layer** and a **teaching/portfolio project**. For high-stakes
+production it should sit alongside (or behind) a mature engine — see *Limitations*.
 
 ## Features
 
--   **Basic Threat Detection:** Uses regular expressions to detect and block common SQLi and XSS attack patterns.
--   **Reverse Proxy Architecture:** Sits between the user and your web server, forwarding only legitimate traffic.
--   **Interactive Setup:** A command-line interface guides you through the configuration of IPs and protocols.
--   **HTTP & HTTPS Support:** Can operate in both non-SSL (HTTP) and SSL/TLS (HTTPS) modes, performing SSL termination to inspect encrypted traffic.
--   **Customizable Block Page:** Serves a user-friendly HTML page when an attack is detected and blocked.
--   **Intelligent Response Rewriting:** Correctly handles backend redirects and session cookies, ensuring web applications function properly behind the proxy.
+- **Attack detection** — scored signature engine covering SQL injection, XSS,
+  path traversal / LFI, command injection, and known scanner tooling. Scoring
+  (not single-hit) reduces false positives.
+- **Evasion resistance** — multi-pass URL decoding, HTML-entity decoding, SQL
+  comment stripping, null-byte and case normalization before matching.
+- **Inspects everything** — path, query string, request body (JSON/form/text),
+  and security-relevant headers (User-Agent, Referer, Cookie, X-Forwarded-For).
+- **Correct proxying** — handles gzip/deflate responses, leaves binary bodies
+  untouched, strips hop-by-hop headers, rewrites `Location` and `Set-Cookie`.
+- **Hardening** — TLS 1.2+ termination, bounded request/response sizes,
+  per-IP token-bucket rate limiting, Slowloris socket timeouts, no version leak.
+- **Operability** — structured JSON logging, `/healthz` endpoint, graceful
+  shutdown, env/CLI/interactive config, detect-only mode, Docker-ready.
+- **Zero required dependencies** — runs on the stdlib; uses `requests` for
+  connection pooling if installed, otherwise falls back to `urllib`.
+- **Pluggable engine** — swap `RegexDetectionEngine` for ModSecurity/Coraza by
+  implementing the `DetectionEngine` interface.
 
----
-
-## Requirements
-
--   Python 3.x
--   `requests` library (`pip install requests`)
-
----
-
-## Setup and Usage
-
-Follow these steps to get the WAF up and running.
-
-### 1. Clone the Repository
+## Quick start
 
 ```bash
-git clone <your-repository-url>
-cd <repository-directory>
+# Plain HTTP, protecting a backend on 10.0.0.5:8000
+python3 waf.py --listen-port 8080 --target-host 10.0.0.5 --target-port 8000
 ```
 
-### 2. Install Dependencies
-
 ```bash
-pip install requests, ssl
-```
-
-### 3. (Optional) Generate SSL Certificate for HTTPS Mode
-
-If you plan to use the WAF in HTTPS mode, you need to generate a self-signed certificate and a private key. The `openssl` command will create `cert.pem` and `key.pem`.
-
-```bash
+# HTTPS termination at the WAF
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes
+python3 waf.py --ssl --listen-port 8443 \
+  --cert-file cert.pem --key-file key.pem \
+  --target-host 127.0.0.1 --target-port 8000
 ```
-*(You can press Enter to accept the defaults when prompted for certificate information.)*
-
-### 4. Run the WAF
-
-Launch the script from your terminal:
 
 ```bash
-python3 WAF.py
+# Interactive prompts (like the original script)
+python3 waf.py --interactive
 ```
 
-The script will then prompt you to configure it interactively:
-
-```
---- WAF Configuration ---
-Select Protocol:
-1. Non-SSL (HTTP)
-2. SSL/TLS (HTTPS)
-Enter choice (1 or 2): 2
-
-Enter Your Web Server IP : 192.168.10.50
-Enter Your WAF Server IP : 192.168.10.101
-Enter path to SSL certificate file (e.g., cert.pem): cert.pem
-Enter path to SSL private key file (e.g., key.pem): key.pem
-
---- Starting WAF ---
-✅ WAF running in SSL/TLS (HTTPS) mode on port 443
-Forwarding to: http://192.168.10.50:80
-Press Ctrl+C to stop.
+```bash
+# Detect-only: log attacks but never block (great for tuning before enforcing)
+python3 waf.py --detect-only --target-host 127.0.0.1 --target-port 8000
 ```
 
-Once running, direct your web traffic to the WAF's IP address.
+## Configuration
 
----
+Precedence: **CLI flags > environment variables > defaults**.
 
-## Testing Environment Setup (VMware)
+| Env var | CLI | Default | Description |
+|---|---|---|---|
+| `WAF_LISTEN_HOST` | `--listen-host` | `0.0.0.0` | Bind address |
+| `WAF_LISTEN_PORT` | `--listen-port` | `8080` | Listen port |
+| `WAF_TARGET_HOST` | `--target-host` | `127.0.0.1` | Backend host |
+| `WAF_TARGET_PORT` | `--target-port` | `80` | Backend port |
+| `WAF_TARGET_SCHEME` | `--target-scheme` | `http` | `http` or `https` backend |
+| `WAF_SSL` | `--ssl` / `--no-ssl` | `false` | Terminate TLS at the WAF |
+| `WAF_CERT_FILE` | `--cert-file` | `cert.pem` | TLS certificate |
+| `WAF_KEY_FILE` | `--key-file` | `key.pem` | TLS private key |
+| `WAF_PUBLIC_HOST` | `--public-host` | _(empty)_ | Host used to rewrite `Location`/cookies/HTML |
+| `WAF_REWRITE_HTML` | — | `false` | Rewrite backend host inside `text/html` bodies |
+| `WAF_BLOCKING` | `--detect-only` | `true` | Enforce blocks (`false` = log only) |
+| `WAF_VERIFY_UPSTREAM` | — | `true` | Verify backend TLS cert (if https) |
+| `WAF_RATE_LIMIT` | — | `true` | Enable per-IP rate limiting |
+| `WAF_TRUSTED_PROXIES` | — | _(empty)_ | Comma-separated IPs whose `X-Forwarded-For` is trusted |
+| `WAF_LOG_LEVEL` | — | `INFO` | Log level |
+| `WAF_LOG_JSON` | — | `true` | JSON vs plain logs |
 
-To properly test the WAF, you should use an isolated virtual environment. This setup uses three separate virtual machines.
+Tunable in code (`Config`): `max_request_body`, `max_response_body`,
+`upstream_timeout`, `socket_timeout`, `rate_limit_rps`, `rate_limit_burst`,
+`block_status`, `block_page_file`.
 
-### 1. VMware Network Configuration
+## Docker
 
--   Create a **"Host-Only"** or **"Private"** virtual network in VMware. This isolates the VMs from your main network.
--   Disable DHCP on this virtual network to use static IPs.
+```bash
+docker build -t waf .
+docker run -p 8080:8080 \
+  -e WAF_TARGET_HOST=backend -e WAF_TARGET_PORT=8000 \
+  --name waf waf
+```
 
-### 2. Virtual Machines
+## systemd
 
-Create three VMs and connect them to your Host-Only network.
+```ini
+# /etc/systemd/system/waf.service
+[Unit]
+Description=Reverse-proxy WAF
+After=network.target
 
--   **Web Server VM (Target):**
-    -   **OS:** OWASP Broken Web Apps (BWA) is a perfect choice.
-    -   **Static IP:** `192.168.10.50`
--   **WAF VM (Firewall):**
-    -   **OS:** Kali Linux or any Debian-based distro.
-    -   **Static IP:** `192.168.10.101`
--   **Attacker VM (Client):**
-    -   **OS:** Ubuntu Desktop or Kali Linux.
-    -   **Static IP:** `192.168.10.102`
+[Service]
+Environment=WAF_LISTEN_PORT=8080
+Environment=WAF_TARGET_HOST=127.0.0.1
+Environment=WAF_TARGET_PORT=8000
+ExecStart=/usr/bin/python3 /opt/waf/waf.py
+Restart=always
+DynamicUser=yes
+NoNewPrivileges=yes
 
-### 3. Deployment and Testing
+[Install]
+WantedBy=multi-user.target
+```
 
-1.  **On the WAF VM (`192.168.10.101`):**
-    -   Clone the repository and install dependencies.
-    -   Run `python3 WAF.py`.
-    -   When prompted, enter the Web Server IP (`192.168.10.50`) and the WAF IP (`192.168.10.101`).
+## How detection works
 
-2.  **On the Attacker VM (`192.168.10.102`):**
-    -   Open a web browser and navigate to the WAF's IP (e.g., `http://192.168.10.101:8080`). You should see the OWASP BWA homepage.
-    -   Use `curl` or your browser to test attacks. All traffic must be sent to the WAF's IP.
+Each request part is **normalized** (decode → de-entity → strip comments →
+lowercase) and matched against weighted rules. A request is blocked only when the
+**combined score** reaches the threshold (default 5), so a single weak signal
+won't cause a false positive but a clear attack will. Tune weights/threshold in
+`RegexDetectionEngine`.
 
-    **Example Attack Tests:**
-    Open the WAF IP address, and it will open OWASP BWA in the web
-    or
-    ```bash
-    # Test for SQL Injection (should be blocked)
-    curl "http://192.168.10.101/dvwa/vulnerabilities/sqli/?id=1'%20OR%20'1'='1&Submit=Submit#"
+Use `--detect-only` in production first, watch the logs for false positives on
+your real traffic, adjust, then switch to enforcing.
 
-    # Test for XSS (should be blocked)
-    curl "http://192.168.10.101/dvwa/vulnerabilities/xss_r/?name=<script>alert('xss')</script>"
-    ```
+## Plugging in a stronger engine
 
----
+```python
+class MyEngine(waf.DetectionEngine):
+    def inspect(self, *, method, path, query, headers, body):
+        ...
+        return waf.Verdict(blocked=..., score=..., findings=[...])
+```
 
-## How It Works
+Then pass it where `RegexDetectionEngine()` is constructed in `run()`.
 
-The WAF operates as a reverse proxy, creating a protective barrier for your web server.
+## Limitations (read before production)
 
-1.  **Request Interception:** All user traffic is sent to the WAF first.
-2.  **SSL Termination (HTTPS Mode):** If running in HTTPS mode, the WAF decrypts the traffic using its SSL certificate so it can be inspected.
-3.  **Threat Inspection:** The WAF scans the request's URL, headers, and body for malicious patterns defined by regular expressions.
-4.  **Blocking or Forwarding:**
-    -   If a threat is found, the WAF blocks the request and redirects the user to a custom error page.
-    -   If the request is clean, the WAF forwards it to the actual web server.
-5.  **Response Rewriting:** The WAF intercepts the response from the web server. It rewrites URLs, redirects, and session cookies to ensure that all future communication continues to go through the proxy, making the process seamless to the end-user.
-6.  **Relaying Response:** The modified response is sent back to the user's browser.
-
----
-
-## File Structure
-
--   `WAF.py`: The main Python script containing all the WAF logic.
--   `error.html`: The customizable HTML page that is shown to users when their request is blocked.
--   `key.pem`: The private key for the SSL certificate (generated by you).
--   `cert.pem`: The public SSL certificate (generated by you).
-
----
+- A signature/regex WAF is a **speed bump, not a wall**. Skilled attackers can
+  craft bypasses. For serious production protection, run **ModSecurity + OWASP
+  CRS**, **Coraza**, or a cloud WAF — and treat this as a complementary first
+  layer.
+- Bodies are buffered up to `max_response_body` for rewriting; this is not a
+  streaming proxy for very large downloads (raise the cap or disable rewrite).
+- The threaded stdlib server is fine for low/medium traffic. For high
+  concurrency, front it with nginx/HAProxy or move to an async runtime.
+- This does not replace input validation, parameterized queries, output
+  encoding, CSP, and authentication in your application. Defense in depth.
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
-## 📝 Author
-
-Created with ❤️ by **AMIRX**
+Provided as-is. Add your preferred license.

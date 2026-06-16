@@ -1,0 +1,4 @@
+# Core runs on the Python standard library alone (no install needed).
+# `requests` is OPTIONAL and only enables upstream connection pooling + retries.
+# Without it, the WAF transparently falls back to urllib.
+requests>=2.31.0

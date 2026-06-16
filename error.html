@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>403 Forbidden - Access Denied</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>403 — Request Blocked</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; min-height:100vh; display:flex; align-items:center;
+           justify-content:center; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           background:#0f1115; color:#e6e8ec; }
+    .card { max-width:440px; padding:40px; text-align:center; }
+    .code { font-size:64px; font-weight:800; letter-spacing:-2px; margin:0; color:#ff5d5d; }
+    h1 { font-size:20px; margin:12px 0 8px; }
+    p { color:#9aa0aa; line-height:1.6; margin:0; }
+    .id { margin-top:24px; font-size:12px; color:#5c626c; }
+  </style>
 </head>
-<body class="bg-gray-900 text-white flex items-center justify-center h-screen antialiased">
-    <div class="text-center bg-gray-800 p-8 sm:p-12 rounded-xl shadow-2xl max-w-md mx-4 border border-gray-700">
-        <!-- Shield Icon -->
-        
-        <!-- Main Heading -->
-        <h1 class="text-4xl font-bold text-red-400 mb-2">Access Denied</h1>
-        
-        <!-- Subheading -->
-        <p class="text-lg text-gray-300 mb-6">Your request has been blocked by our security firewall.</p>
-        
-        <!-- Explanation -->
-        <p class="text-gray-400">A potential security threat was detected in your request. This action has been logged for security purposes.</p>
-    </div>
+<body>
+  <div class="card">
+    <p class="code">403</p>
+    <h1>Your request was blocked</h1>
+    <p>This request was identified as potentially malicious and has been blocked by the web application firewall. If you believe this is an error, contact the site administrator.</p>
+    <p class="id">Blocked by WAF</p>
+  </div>
 </body>
 </html>
